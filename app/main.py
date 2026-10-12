@@ -15,8 +15,10 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.encoders import jsonable_encoder
 import random
+from typing import Annotated
+from pydantic import BaseModel
 
-from datetime import datetime
+from datetime import datetime, timezone
 import phonenumbers
 
 # For password hashing
@@ -261,16 +263,21 @@ def home(request: Request):
         context= {"client_name": client["name"], "client_subname": client["subname"], "logo": logo_path, "primary_color": client["primary_color"], "secondary_color": client["secondary_color"], "text_color": client["text-color"], "error": error}
     )
 
+# ChatGPT made this class to help with validation
+class LoginRequest(BaseModel):
+    phone: str
+    tos: bool | None = None
+
 # ChatGPT helped me get the syntax for Form function from Jinja2
 @app.post("/login", response_class=HTMLResponse)
-async def login(request: Request, phone: str = Form(...)):
+async def login(request: Request, data: Annotated[LoginRequest, Form()]):
     client = {"id": 1, "name": "La Fleur", "subname": "Bistro Frances", "image_id": "lafleurbistro", "primary_color": "#512828", "secondary_color": "white", "text-color": "white"}
     logo_path = "/static/resources/images/" + client["image_id"] + ".png"
-    parsed_phone = phone_validation(phone)
+    parsed_phone = phone_validation(data.phone)
     google_auth_response = google_auth()
     user_id = client["id"]
 
-    if (parsed_phone and google_auth_response["valid"]):
+    if (parsed_phone and google_auth_response["valid"] and data.tos == 1):
 
 
 
@@ -286,7 +293,7 @@ async def login(request: Request, phone: str = Form(...)):
         ssid = "La Fleur - WiFi"
         mac = "AA:BB:CC:DD:EE:FF"
 
-        tos_accepted_at = datetime.now()
+        tos_accepted_at = datetime.now(timezone.utc)
 
         # Checks if the
         # AI helped with the use of error_reponse to catch the errors from the helpers
@@ -313,6 +320,9 @@ async def login(request: Request, phone: str = Form(...)):
                     context= {"client_name": client["name"], "client_subname": client["subname"], "logo": logo_path, "primary_color": client["primary_color"], "secondary_color": client["secondary_color"], "text_color": client["text-color"], "error": None}
                     )
     else:
+        if not data.tos:
+            request.session["lead_error"] = "Authentication failed"
+            return RedirectResponse(url="/", status_code=400)
 
         # render error in login page if phone is invalid
         return templates.TemplateResponse(
