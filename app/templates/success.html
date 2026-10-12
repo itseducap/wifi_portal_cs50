@@ -1,5 +1,24 @@
 {% extends "base.html" %}
 
 {% block latter_half %}
-    <h3 class="">Success</h3>
+    <h3 class="text-center mb-5">Success</h3>
+    <p class="text-center redirect-text">You will be redirected in</p>
+    <p class="text-center redirect-text" id="SecElement">3s</p>
+
+    <script>
+        const redirectUrl = {{ redirect_url | tojson }};
+        const secElement = document.getElementById("SecElement");
+
+        setTimeout(() => {
+            secElement.textContent = "2s";
+        }, 1000);
+
+        setTimeout(() => {
+            secElement.textContent = "1s";
+        }, 2000);
+
+        setTimeout(() => {
+            window.location.assign(redirectUrl);
+        }, 3000);
+    </script>
 {%endblock%}

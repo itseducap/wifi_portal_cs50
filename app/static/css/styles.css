@@ -118,6 +118,9 @@ body {
     color: red;
     font-size: 13px;
 }
+.redirect-text {
+    font-size: 25px;
+}
 
 /* TEXT END */
 
@@ -281,6 +284,9 @@ button {
     .error {
         color: red;
         font-size: 12px;
+    }
+    .redirect-text {
+        font-size: 18px;
     }
 
     /* TEXT END */

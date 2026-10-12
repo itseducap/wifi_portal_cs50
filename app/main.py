@@ -113,6 +113,21 @@ def google_auth():
     valid = True
     return ({"name": name, "email": email, "valid": valid})
 
+# TODO: change to real omada API call
+def auth_lead_omada(client_params: dict):
+    try:
+        if client_params["clientMac"] is None or client_params["clientIp"] is None or client_params["apMac"] is None or client_params["ssidName"] is None or client_params["radioId"] is None:
+            return {"errorCode": 503}
+        response = {
+            "errorCode": 0
+        }
+        return response
+    except KeyError:
+        return {
+            "errorCode": 503
+        }
+
+
 async def auth_user(request: Request):
     user_id = request.session.get("user_id")
     session_version = request.session.get("session_version")
@@ -254,11 +269,22 @@ def check_and_normalize_email(email: str) -> dict:
 # and modification of the FastAPI example for Jinja2 templates
 # https://fastapi.tiangolo.com/advanced/templates/#using-jinja2templates
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, clientMac: str = Query(default="AA:BB:CC:DD:EE:FF", alias="clientMac"), clientIp: str = Query(default="123", alias="clientIp"), apMac: str = Query(default="BB:CC:DD:EE:FF:GG", alias="apMac"), ssidName: str = Query(default="La Fleur - WiFi", alias="ssidName"),  t: int = Query(default=12, alias="t"), radioId: int = Query(default=0, alias="radioId"), site: str = Query(default="https://aaaaaa.com.br", alias="site"), redirectUrl: str = Query(default="https://lafleurbistro.com.br", alias="redirectUrl")):
     client = {"id": 1, "name": "La Fleur", "subname": "Bistro Frances", "image_id": "lafleurbistro", "primary_color": "#512828", "secondary_color": "white", "text-color": "white"}
     logo_path = "/static/resources/images/" + client["image_id"] + ".png"
     error = request.session.pop("lead_error", None)
     # render login page
+    request.session["client_params"] = {
+        "clientMac": clientMac,
+        "clientIp": clientIp,
+        "apMac": apMac,
+        "ssidName": ssidName,
+        "t": t,
+        "radioId": radioId,
+        "site": site,
+        "redirectUrl": redirectUrl
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="login.html",
@@ -270,68 +296,88 @@ class LoginRequest(BaseModel):
     phone: str
     tos: bool | None = None
 
-# ChatGPT helped me get the syntax for Form function from Jinja2
+# ChatGPT helped me get the syntax for Form helper from FastAPI
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, data: Annotated[LoginRequest, Form()]):
-    client = {"id": 1, "name": "La Fleur", "subname": "Bistro Frances", "image_id": "lafleurbistro", "primary_color": "#512828", "secondary_color": "white", "text-color": "white"}
-    logo_path = "/static/resources/images/" + client["image_id"] + ".png"
-    parsed_phone = phone_validation(data.phone)
-    google_auth_response = google_auth()
-    user_id = client["id"]
+    try:
+        client = {"id": 1, "name": "La Fleur", "subname": "Bistro Frances", "image_id": "lafleurbistro", "primary_color": "#512828", "secondary_color": "white", "text-color": "white", "timezone": "America/Sao_Paulo"}
+        logo_path = "/static/resources/images/" + client["image_id"] + ".png"
+        parsed_phone = phone_validation(data.phone)
+        google_auth_response = google_auth()
+        user_id = client["id"]
 
-    if (parsed_phone and google_auth_response["valid"] and data.tos == 1):
+        client_params = request.session.get("client_params")
 
+        if client_params is None:
+            request.session["error"] = "Something went wrong, try again"
+            return RedirectResponse(url="/", status_code=303)
 
+        if (parsed_phone and google_auth_response["valid"] and data.tos == 1):
 
-        # Check if lead exists
-        lead_id = await lead_exists(request, parsed_phone, user_id)
+            # Check if lead exists
+            lead_id = await lead_exists(request, parsed_phone, user_id)
 
-        # AI made this snippet
-        # Check if it returned an error
-        if isinstance(lead_id, RedirectResponse):
-            return lead_id
+            # AI made this snippet
+            # Check if it returned an error
+            if isinstance(lead_id, RedirectResponse):
+                return lead_id
 
-        # Fake ssid and mac
-        ssid = "La Fleur - WiFi"
-        mac = "AA:BB:CC:DD:EE:FF"
+            ssid = client_params["ssidName"]
+            mac = client_params["clientMac"]
+            redirect_url = client_params["redirectUrl"]
 
-        tos_accepted_at = datetime.now(timezone.utc)
+            if data.tos != 1:
+                request.session["lead_error"] = "Authentication failed"
+                return RedirectResponse(url="/", status_code=400)
+            # Used AI for timezone
+            tos_accepted_at = datetime.now(timezone.utc)
 
-        # Checks if the
-        # AI helped with the use of error_reponse to catch the errors from the helpers
-        if lead_id:
-            error_reponse = await create_visit(request,ssid, mac, tos_accepted_at, None, lead_id)
-        else:
-            error_reponse = await create_lead(
-                request,
-                google_data = google_auth_response,
-                phone=parsed_phone,
-                user_id=user_id,
-                ssid=ssid,
-                mac=mac,
-                tos_accepted_at=tos_accepted_at,
-                visit_metadata={"extra_info": "First Access"}
-                )
-        if error_reponse is not None:
-            return error_reponse
+            auth_error = auth_lead_omada(client_params)
+            if auth_error["errorCode"] != 0:
+                request.session["lead_error"] = "Authentication failed"
+                return RedirectResponse(url="/", status_code=303)
 
-        # Render sucess page if phone is valid
-        return templates.TemplateResponse(
+            # Checks if the
+            # AI helped with the use of error_reponse to catch the errors from the helpers
+            if lead_id:
+                error_reponse = await create_visit(request,ssid, mac, tos_accepted_at, None, lead_id)
+            else:
+                error_reponse = await create_lead(
+                    request,
+                    google_data = google_auth_response,
+                    phone=parsed_phone,
+                    user_id=user_id,
+                    ssid=ssid,
+                    mac=mac,
+                    tos_accepted_at=tos_accepted_at,
+                    visit_metadata={"extra_info": "First Access"}
+                    )
+            # Returns error if any
+            if error_reponse is not None:
+                return error_reponse
+
+            # Renders the templates
+            return templates.TemplateResponse(
                     request=request,
                     name="success.html",
-                    context= {"client_name": client["name"], "client_subname": client["subname"], "logo": logo_path, "primary_color": client["primary_color"], "secondary_color": client["secondary_color"], "text_color": client["text-color"], "error": None}
+                    context= {"client_name": client["name"], "client_subname": client["subname"], "logo": logo_path, "primary_color": client["primary_color"], "secondary_color": client["secondary_color"], "text_color": client["text-color"], "error": None, "redirect_url": redirect_url}
                     )
-    else:
-        if not data.tos:
-            request.session["lead_error"] = "Authentication failed"
-            return RedirectResponse(url="/", status_code=400)
 
-        # render error in login page if phone is invalid
-        return templates.TemplateResponse(
-                    request=request,
-                    name="login.html",
-                    context= {"client_name": client["name"], "client_subname": client["subname"], "logo": logo_path, "primary_color": client["primary_color"], "secondary_color": client["secondary_color"], "text_color": client["text-color"], "error": "Invalid phonenumber"}
-                    )
+        else:
+            # Redirect to login page with error if the tos is omitted
+            if not data.tos:
+                request.session["lead_error"] = "Authentication failed"
+                return RedirectResponse(url="/", status_code=400)
+
+            # Render error in login page if phone is invalid
+            request.session["lead_error"] = "Invalid Phonenumber"
+            return RedirectResponse(url="/", status_code=401)
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=503,
+            details= "Service temporarily unavailable"
+        )
 
 @app.get("/admin/login", response_class=HTMLResponse)
 def admin_login(request: Request):
