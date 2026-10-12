@@ -143,7 +143,8 @@ async def create_lead (request: Request, *, google_data: dict, phone: str, user_
 
             await session.flush()
 
-            first_visit = Visit(ssid = ssid, mac = mac, tos_accepted_at = tos_accepted_at, visit_metadata = visit_metadata, lead_id = lead.id)
+            created_at = datetime.now(timezone.utc)
+            first_visit = Visit(ssid = ssid, mac = mac, tos_accepted_at = tos_accepted_at, created_at = created_at, visit_metadata = visit_metadata, lead_id = lead.id)
             session.add(first_visit)
             await session.commit()
             return
@@ -162,7 +163,8 @@ async def create_visit(request: Request, ssid: str, mac: str, tos_accepted_at: d
     async with async_session() as session:
         try:
             # AI helped with session.add syntax
-            visit= Visit(ssid = ssid, mac = mac, tos_accepted_at = tos_accepted_at, visit_metadata = visit_metadata, lead_id = lead_id)
+            created_at = datetime.now(timezone.utc)
+            visit= Visit(ssid = ssid, mac = mac, tos_accepted_at = tos_accepted_at, created_at = created_at, visit_metadata = visit_metadata, lead_id = lead_id)
             session.add(visit)
             await session.commit()
         #AI helped with exception

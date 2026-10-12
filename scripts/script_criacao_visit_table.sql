@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS visit(
     ssid VARCHAR(100) NOT NULL,
     mac VARCHAR(17) NOT NULL,
     tos_accepted_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL,
     metadata JSON,
 
     lead_id INT UNSIGNED NOT NULL,

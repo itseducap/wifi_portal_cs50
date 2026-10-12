@@ -16,8 +16,7 @@ class Visit(Base):
     mac: Mapped[str] = mapped_column(String(17))
     tos_accepted_at: Mapped[datetime.datetime]
 
-    # copied from https://docs.sqlalchemy.org/en/21/orm/extensions/asyncio.html
-    created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime.datetime]
 
     # Ai helped with JSON column
     visit_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON, nullable = True)
